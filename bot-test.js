@@ -1,76 +1,72 @@
 const puppeteer = require('puppeteer');
 
-class BotSimulator {
-    constructor() {
-        this.browser = null;
-        this.page = null;
+async function runBot() {
+    // Launch browser - headless: false so you can watch the bot work
+    const browser = await puppeteer.launch({ 
+        headless: false,
+        args: ['--window-size=1280,800'] 
+    });
+    const page = await browser.newPage();
+    
+    // REPLACE with your local or hosted URL
+    const targetUrl = 'http://localhost:3000'; 
+    await page.goto(targetUrl);
+
+    console.log("--- BOT STARTED: Running Infinite Interaction Cycle ---");
+
+    // helper for linear movement
+    async function botMove(targetX, targetY) {
+        // Puppeteer's mouse move is perfectly linear by default
+        await page.mouse.move(targetX, targetY, { steps: 50 }); 
     }
 
-    async init(url) {
-        // Launching with 'headless: false' lets you see the bot in action
-        this.browser = await puppeteer.launch({ headless: false });
-        this.page = await this.browser.newPage();
-        await this.page.goto(url);
-    }
+    while (true) {
+        try {
+            console.log("Starting new interaction wave...");
 
-    // PROFILE 1: The "Instant" Bot (Teleportation)
-    // Most basic bot: no intermediate coordinates recorded
-    async teleportMove(x, y) {
-        console.log(`Teleporting to ${x}, ${y}`);
-        await this.page.mouse.move(x, y); 
-        await this.page.mouse.click(x, y);
-    }
+            // 1. Random Cursor Movement (Simulating "Scanning" the page)
+            await botMove(Math.random() * 800, Math.random() * 600);
+            await new Promise(r => setTimeout(r, 500));
 
-    // PROFILE 2: The "Linear" Bot (Mathematical perfection)
-    // Moves in a perfectly straight line with 0 variance
-    async linearMove(targetX, targetY, steps = 10) {
-        console.log("Executing Linear Movement...");
-        const start = await this.page.evaluate(() => ({ x: window.scrollX, y: window.scrollY })); 
-        // Note: simplified start point; usually tracked from last known pos
-        
-        for (let i = 0; i <= steps; i++) {
-            const x = i * (targetX / steps);
-            const y = i * (targetY / steps);
-            await this.page.mouse.move(x, y);
-            // No jitter or delay variation here
-            await new Promise(r => setTimeout(r, 20)); 
+            // 2. Typing into an Input field
+            // Replace '#username' with your actual input ID
+            const inputExists = await page.$('input');
+            if (inputExists) {
+                await botMove(200, 200); // Move to general area
+                await page.click('input'); 
+                await page.type('input', 'Bot_Attack_Sequence_Active', { delay: 50 });
+                console.log("Typed into input field.");
+            }
+
+            // 3. Clicking a Button
+            // Replace 'button' with your actual button ID/Class
+            const buttonExists = await page.$('button');
+            if (buttonExists) {
+                await botMove(400, 400); // Move toward button
+                await page.click('button');
+                console.log("Clicked a button.");
+            }
+
+            // 4. Clicking a URL/Link
+            const linkExists = await page.$('a');
+            if (linkExists) {
+                // We just hover/click the first link found
+                await page.click('a');
+                console.log("Navigated via Link.");
+                await page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {});
+                // Go back to the main page to keep the loop going
+                await page.goto(targetUrl);
+            }
+
+            // Wait 2 seconds before repeating to allow backend to process
+            console.log("Wave complete. Waiting for next cycle...");
+            await new Promise(r => setTimeout(r, 2000));
+
+        } catch (error) {
+            console.log("Interaction failed or element not found, retrying loop...", error.message);
+            await page.goto(targetUrl); // Refresh if it gets stuck
         }
-    }
-
-    // PROFILE 3: The "Jitter" Bot (Attempting to bypass simple checks)
-    // Adds random noise, but often lacks human acceleration curves
-    async jitterMove(targetX, targetY) {
-        console.log("Executing Jitter Movement...");
-        for (let i = 0; i < 20; i++) {
-            const x = (i * (targetX / 20)) + (Math.random() * 5);
-            const y = (i * (targetY / 20)) + (Math.random() * 5);
-            await this.page.mouse.move(x, y);
-            await new Promise(r => setTimeout(r, Math.random() * 50));
-        }
-    }
-
-    async close() {
-        await this.browser.close();
     }
 }
 
-// EXECUTION SCRIPT
-(async () => {
-    const tester = new BotSimulator();
-    await tester.init('http://localhost:3000'); 
-
-    console.log("--- STARTING PERPETUAL BOT ATTACK ---");
-
-    // This loop keeps the bot active so your threshold can be reached
-    for (let i = 0; i < 50; i++) { 
-        console.log(`Attack Wave #${i}`);
-        
-        // Simulate a bot-like linear move
-        await tester.linearMove(Math.random() * 1000, Math.random() * 800, 100);
-        
-        // Wait a bit to simulate "thinking" (even bots do this)
-        await new Promise(r => setTimeout(r, 500));
-    }
-
-    console.log("Testing complete. If not detected, your threshold may be too high!");
-})();
+runBot().catch(err => console.error("Fatal Bot Error:", err));
