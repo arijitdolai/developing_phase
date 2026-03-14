@@ -57,15 +57,20 @@ class BotSimulator {
 // EXECUTION SCRIPT
 (async () => {
     const tester = new BotSimulator();
-    // Replace with your local or hosted bot-detection URL
     await tester.init('http://localhost:3000'); 
 
-    // Test Case 1: The Teleporter
-    await tester.teleportMove(400, 400);
-    
-    // Test Case 2: The Linear Move
-    await tester.linearMove(800, 600, 50);
+    console.log("--- STARTING PERPETUAL BOT ATTACK ---");
 
-    console.log("Testing complete. Check your backend logs for classification.");
-    // await tester.close();
+    // This loop keeps the bot active so your threshold can be reached
+    for (let i = 0; i < 50; i++) { 
+        console.log(`Attack Wave #${i}`);
+        
+        // Simulate a bot-like linear move
+        await tester.linearMove(Math.random() * 1000, Math.random() * 800, 100);
+        
+        // Wait a bit to simulate "thinking" (even bots do this)
+        await new Promise(r => setTimeout(r, 500));
+    }
+
+    console.log("Testing complete. If not detected, your threshold may be too high!");
 })();
