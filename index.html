@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SecureLogin — Passive Verification Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:          #0a0a0f;
+      --surface:     #111118;
+      --border:      #1e1e2e;
+      --accent:      #00e5ff;
+      --accent-dim:  rgba(0,229,255,0.10);
+      --accent-glow: rgba(0,229,255,0.30);
+      --warning:     #ff6b35;
+      --success:     #00ff9f;
+      --text:        #e8e8f0;
+      --muted:       #5a5a7a;
+      --dim:         #3a3a5a;
+      --mono:        'IBM Plex Mono', monospace;
+      --display:     'Syne', sans-serif;
+    }
+
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* dot-grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, #1e1e3a 1px, transparent 1px);
+      background-size: 36px 36px;
+      opacity: 0.4;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── STATS PANEL ── */
+    .stats-panel {
+      position: fixed;
+      top: 20px; right: 20px;
+      width: 190px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 8px 10px;
+      z-index: 100;
+      animation: slideIn .5s ease;
+      overflow-y: auto;
+      max-height: calc(100vh - 40px);
+    }
+    @keyframes slideIn {
+      from { opacity:0; transform:translateX(20px); }
+      to   { opacity:1; transform:translateX(0); }
+    }
+    .stats-title {
+      font-size: 7px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+    .stat-label { font-size: 9px; color: var(--muted); }
+    .stat-value {
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--accent);
+      transition: color .15s;
+    }
+    .stat-value.bump { color: var(--success); }
+
+    .send-status {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+      font-size: 8px;
+      color: var(--muted);
+      text-align: center;
+      min-height: 20px;
+      line-height: 1.4;
+    }
+    .send-status.sent  { color: var(--success); }
+    .send-status.error { color: var(--warning); }
+
+    /* ── MAIN LAYOUT ── */
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── LOGIN CARD ── */
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 40px 36px;
+      position: relative;
+      animation: fadeUp .6s cubic-bezier(.16,1,.3,1);
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(20px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    /* corner brackets */
+    .card::before {
+      content:'';
+      position:absolute; top:-1px; left:-1px;
+      width:24px; height:24px;
+      border-top:2px solid var(--accent);
+      border-left:2px solid var(--accent);
+    }
+    .card::after {
+      content:'';
+      position:absolute; bottom:-1px; right:-1px;
+      width:24px; height:24px;
+      border-bottom:2px solid var(--accent);
+      border-right:2px solid var(--accent);
+    }
+
+    .logo {
+      font-size: 28px;
+      color: var(--accent);
+      text-align: center;
+      animation: pulse 3s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { text-shadow: 0 0 18px var(--accent-glow); }
+      50%      { text-shadow: none; opacity:.7; }
+    }
+
+    h1 {
+      font-family: var(--display);
+      font-size: 24px;
+      font-weight: 800;
+      text-align: center;
+      margin: 8px 0 4px;
+    }
+    .subtitle {
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 30px;
+      letter-spacing: .05em;
+    }
+
+    label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 6px;
+    }
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 11px 13px;
+      outline: none;
+      margin-bottom: 18px;
+      caret-color: var(--accent);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    input[type="email"]:focus,
+    input[type="password"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+      background: rgba(0,229,255,.02);
+    }
+    input::placeholder { color: var(--dim); }
+
+    /* HONEYPOT — invisible to humans, present in DOM for bots */
+    .hp {
+      position: absolute;
+      left: -9999px; top: -9999px;
+      width: 1px; height: 1px;
+      opacity: 0; pointer-events: none;
+    }
+
+    /*
+      ── 3 NEW HONEYPOTS (1×1 pixel each) ──
+      These are placed OFF-SCREEN so no human can see or reach them.
+      Bots read the raw DOM and interact with ALL elements they find —
+      they don't care about position or size.
+
+      IMPORTANT: pointer-events is NOT disabled here on the link,
+      because we want to catch programmatic .click() calls from bots.
+      The inputs use 'pointer-events:none' since bots fill them via
+      direct DOM manipulation, not mouse clicks.
+    */
+
+    /* HP1 — Link styled as "Save Password" button */
+    #hp-link-wrap {
+      position: absolute;
+      left: -9999px; top: -9999px;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      opacity: 0;
+    }
+    #hp-link {
+      display: inline-block;
+      width: 1px; height: 1px;
+      font-size: 1px;
+      color: transparent;
+      text-decoration: none;
+    }
+
+    /* HP2 — Input: Rewrite Password */
+    #hp-rewrite-pwd {
+      position: absolute;
+      left: -9999px; top: -9999px;
+      width: 1px; height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      font-size: 1px;
+    }
+
+    /* HP3 — Input: Mobile Phone Number */
+    #hp-phone {
+      position: absolute;
+      left: -9999px; top: -9999px;
+      width: 1px; height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      font-size: 1px;
+    }
+
+    /* ── TRIGGERED state shown in stats panel ── */
+    .stat-value.triggered {
+      color: var(--warning) !important;
+      font-weight: 700;
+    }
+
+    button {
+      width: 100%;
+      padding: 13px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      transition: color .25s;
+      margin-top: 8px;
+    }
+    button::before {
+      content:'';
+      position:absolute; inset:0;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+      z-index: 0;
+    }
+    button:hover::before { transform: scaleX(1); }
+    button:hover { color: var(--bg); box-shadow: 0 0 20px var(--accent-glow); }
+    button span { position: relative; z-index: 1; }
+
+    .badge {
+      margin-top: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: blink 1.4s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes blink {
+      0%,100% { opacity:1; }
+      50%      { opacity:.15; }
+    }
+    .badge.human .dot { background:var(--success); animation:none; }
+    .badge.bot   .dot { background:var(--warning); animation:none; }
+    .badge.human      { color:var(--success); }
+    .badge.bot        { color:var(--warning); }
+
+    /* ── CLICK LOG BOX ── */
+    .click-log {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+    }
+    .click-log-title {
+      font-size: 7px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: .10em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .click-log-empty {
+      font-size: 8px;
+      color: var(--dim);
+    }
+    .click-entry {
+      font-size: 8px;
+      color: var(--text);
+      padding: 2px 0;
+      border-bottom: 1px dashed var(--border);
+      line-height: 1.4;
+    }
+    .click-entry span.dur-human { color: var(--success); font-weight: 600; }
+    .click-entry span.dur-bot   { color: var(--warning); font-weight: 600; }
+
+    /* ── TRAJECTORY CANVAS OVERLAY ── */
+    /* Fixed full-page overlay — sits over everything, never blocks clicks */
+    #trajectoryCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 999;
+    }
+    #trajLabel {
+      position: fixed;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--accent);
+      letter-spacing: .08em;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0.7;
+      white-space: nowrap;
+    }
+
+    /* ── HEATMAP PANEL ── */
+    .heatmap-wrap {
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .heatmap-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    #heatmapCanvas {
+      display: block;
+      width: 100%;
+      /* height set by JS to match button aspect ratio */
+      border: 1px solid var(--border);
+    }
+    /* Click data row below heatmap */
+    .heatmap-info {
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+    .heatmap-info .hi-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .hi-score-100 { color: #ff4444; font-weight:700; }
+    .hi-score-90  { color: #ff7700; font-weight:700; }
+    .hi-score-80  { color: #ffaa00; font-weight:700; }
+    .hi-score-70  { color: #ddcc00; font-weight:700; }
+    .hi-score-60  { color: #aadd00; font-weight:700; }
+    .hi-score-50  { color: #77cc00; font-weight:700; }
+    .hi-score-40  { color: #44bb00; font-weight:700; }
+    .hi-score-30  { color: #00aa44; font-weight:700; }
+    .hi-score-20  { color: #0088aa; font-weight:700; }
+    .hi-score-10  { color: #0055ff; font-weight:700; }
+    .hi-score-0   { color: var(--dim); font-weight:700; }
+
+    footer {
+      position: relative; z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 10px 20px;
+      font-size: 10px;
+      color: var(--dim);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    footer span.sep { color: var(--border); }
+
+    /* ── NET SCORE BAR ── */
+    .net-score-wrap {
+      padding: 8px 0 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+      text-align: center;
+    }
+    .net-score-label {
+      font-size: 7px;
+      color: var(--muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .net-score-value {
+      font-size: 22px;
+      font-weight: 600;
+      font-family: var(--display);
+      color: var(--accent);
+      display: block;
+      line-height: 1.1;
+      transition: color .3s;
+    }
+    .net-score-bar-bg {
+      height: 4px;
+      background: var(--border);
+      margin-top: 5px;
+      position: relative;
+    }
+    .net-score-bar-fill {
+      position: absolute;
+      top: 0; left: 50%;
+      height: 100%;
+      width: 0%;
+      transition: width .4s, background .3s;
+    }
+    .net-score-status {
+      font-size: 8px;
+      margin-top: 3px;
+      color: var(--muted);
+    }
+
+    /* ── BOT POPUP ── */
+    #botPopup {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+    #botPopup.show { display: flex; }
+    .bot-popup-box {
+      background: var(--surface);
+      border: 2px solid #ff2222;
+      padding: 36px 40px;
+      text-align: center;
+      max-width: 360px;
+      animation: fadeUp .4s ease;
+    }
+    .bot-popup-icon { font-size: 40px; margin-bottom: 12px; }
+    .bot-popup-title {
+      font-family: var(--display);
+      font-size: 22px;
+      font-weight: 800;
+      color: #ff2222;
+      margin-bottom: 8px;
+    }
+    .bot-popup-msg {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+    .bot-popup-score {
+      font-size: 11px;
+      color: #ff2222;
+      margin-bottom: 20px;
+    }
+
+    /* ── HUMAN VERIFIED OVERLAY ── */
+    #humanOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 9998;
+      align-items: center;
+      justify-content: center;
+    }
+    #humanOverlay.show { display: flex; }
+    .human-box {
+      background: var(--surface);
+      border: 2px solid var(--success);
+      padding: 36px 40px;
+      text-align: center;
+      max-width: 360px;
+      animation: fadeUp .4s ease;
+    }
+    .human-box-icon { font-size: 40px; margin-bottom: 12px; }
+    .human-box-title {
+      font-family: var(--display);
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--success);
+      margin-bottom: 8px;
+    }
+    .human-box-msg {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BOT DETECTED POPUP -->
+  <div id="botPopup">
+    <div class="bot-popup-box">
+      <div class="bot-popup-icon">⚠</div>
+      <div class="bot-popup-title">Bot Detected</div>
+      <div class="bot-popup-msg">Automated behavior was detected on this session. Access has been blocked.</div>
+      <div class="bot-popup-score" id="botPopupScore">Net Score: +100</div>
+    </div>
+  </div>
+
+  <!-- HUMAN VERIFIED OVERLAY -->
+  <div id="humanOverlay">
+    <div class="human-box">
+      <div class="human-box-icon">✓</div>
+      <div class="human-box-title">Human Verified</div>
+      <div class="human-box-msg">Behavioral analysis complete. You have been verified as human. All monitoring has stopped.</div>
+    </div>
+  </div>
+
+  <!-- Full-page trajectory canvas — sits over everything, never blocks interaction -->
+  <canvas id="trajectoryCanvas"></canvas>
+  <div id="trajLabel"></div>
+
+  <!-- Live stats panel -->
+  <aside class="stats-panel">
+    <div class="stats-title">⬡ Behavior Monitor</div>
+
+    <!-- NET SCORE — prominent at top -->
+    <div class="net-score-wrap">
+      <div class="net-score-label">Net Score</div>
+      <span class="net-score-value" id="netScoreVal">0</span>
+      <div class="net-score-bar-bg">
+        <div class="net-score-bar-fill" id="netScoreBar"></div>
+      </div>
+      <div class="net-score-status" id="netScoreStatus">Monitoring...</div>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Mouse Events</span>
+      <span class="stat-value" id="cMouse">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Path Length</span>
+      <span class="stat-value" id="trajPathLen">— px</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Min Distance</span>
+      <span class="stat-value" id="trajMinDist">— px</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Deviation %</span>
+      <span class="stat-value" id="trajDev">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Velocity CV %</span>
+      <span class="stat-value" id="velCV">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Clicks</span>
+      <span class="stat-value" id="cClick">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Last Click Duration</span>
+      <span class="stat-value" id="cClickDur">— ms</span>
+    </div>
+    <!-- Button heatmap scores — resets every 3 sec window like click log -->
+    <div class="stat-row">
+      <span class="stat-label">Btn Clicks Total</span>
+      <span class="stat-value" id="hmTotal">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Keystrokes</span>
+      <span class="stat-value" id="cKey">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Backspaces</span>
+      <span class="stat-value" id="cBackspace">0</span>
+    </div>
+    <div class="stats-title" style="margin-top:6px;">⬡ Keystroke Analysis</div>
+    <div class="stat-row">
+      <span class="stat-label">Dwell Time</span>
+      <span class="stat-value" id="ksDwell">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Dwell CV %</span>
+      <span class="stat-value" id="ksDwellCV">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Scroll Events</span>
+      <span class="stat-value" id="cScroll">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Focus Events</span>
+      <span class="stat-value" id="cFocus">0</span>
+    </div>
+    <div class="stats-title" style="margin-top:6px;">⬡ Quick Bot Checks</div>
+    <div class="stat-row">
+      <span class="stat-label">WebDriver</span>
+      <span class="stat-value" id="chkWebDriver">—</span>
+    </div>
+    <div class="stats-title" style="margin-top:14px;">⬡ Honeypot Traps</div>
+    <div class="stat-row">
+      <span class="stat-label">🔗 Save Password</span>
+      <span class="stat-value" id="hpLink">CLEAN</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">🔑 Rewrite Pwd</span>
+      <span class="stat-value" id="hpPwd">CLEAN</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">📱 Phone Field</span>
+      <span class="stat-value" id="hpPhone">CLEAN</span>
+    </div>
+
+    <div class="send-status" id="sendStatus">— waiting —</div>
+
+    <!-- Click log — shows all clicks from last 3-sec window -->
+    <div class="click-log">
+      <div class="click-log-title">⬡ Last Window Clicks</div>
+      <div id="clickLog"><span class="click-log-empty">No clicks yet</span></div>
+    </div>
+
+    <!-- Btn score log — shows scores+durations for button clicks this window -->
+    <div class="click-log" style="margin-top:10px;">
+      <div class="click-log-title">⬡ Btn Score / Duration</div>
+      <div id="btnScoreLog"><span class="click-log-empty">No button clicks yet</span></div>
+    </div>
+  </aside>
+
+  <!-- Login card -->
+  <main>
+    <div class="card">
+      <div class="logo">⬡</div>
+      <h1>SecureLogin</h1>
+      <p class="subtitle">Passive verification active — no CAPTCHA needed</p>
+
+      <label for="email">Email Address</label>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="off" />
+
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="off" />
+
+      <!-- ORIGINAL honeypot (text input) -->
+      <input class="hp" type="text" id="honeypot" name="website"
+             tabindex="-1" aria-hidden="true" autocomplete="off" />
+
+      <!--
+        ════════════════════════════════════════════
+        HONEYPOT #1 — Link styled as "Save Password"
+        A bot crawls links and clicks them.
+        A human cannot see this — it is 1×1 px, off-screen.
+        If clicked → IMMEDIATE bot flag.
+        ════════════════════════════════════════════
+      -->
+      <div id="hp-link-wrap" aria-hidden="true">
+        <a id="hp-link"
+           href="#"
+           tabindex="-1"
+           name="save-password"
+           role="button">Save Password</a>
+      </div>
+
+      <!--
+        ════════════════════════════════════════════
+        HONEYPOT #2 — Input: "Rewrite Password"
+        Bots fill every input they find in the DOM.
+        A human cannot see this — it is 1×1 px, off-screen.
+        If any text is entered → IMMEDIATE bot flag.
+        ════════════════════════════════════════════
+      -->
+      <input
+        type="password"
+        id="hp-rewrite-pwd"
+        name="rewrite-password"
+        placeholder="Rewrite Password"
+        tabindex="-1"
+        aria-hidden="true"
+        autocomplete="new-password"
+      />
+
+      <!--
+        ════════════════════════════════════════════
+        HONEYPOT #3 — Input: "Mobile Phone Number"
+        Same principle as above.
+        If any text is entered → IMMEDIATE bot flag.
+        ════════════════════════════════════════════
+      -->
+      <input
+        type="tel"
+        id="hp-phone"
+        name="mobile-number"
+        placeholder="Mobile Phone Number"
+        tabindex="-1"
+        aria-hidden="true"
+        autocomplete="off"
+      />
+
+      <button id="loginBtn" onclick="handleLogin(event)">
+        <span id="btnText">Authenticate</span>
+        <span>→</span>
+      </button>
+
+
+
+      <div class="badge" id="badge">
+        <span class="dot"></span>
+        <span id="badgeText">Collecting behavioral signals...</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <span>Passive Human Verification System</span>
+    <span class="sep">|</span>
+    <span>Signals sent every 3s → POST /verify</span>
+    <span class="sep">|</span>
+    <span id="lastSent">Last sent: never</span>
+  </footer>
+
+  <script>
+    // ── DATA ARRAYS ──
+    const mouseData     = [];
+    const clickData     = [];
+    const keystrokeData = [];
+    const scrollData    = [];
+    const focusData     = [];
+
+    // ══════════════════════════════════════════════════
+    // NET SCORE SYSTEM
+    // Starts at 0. Accumulates every 3 seconds.
+    // >= +100 → BOT (popup, stop everything)
+    // <= -100 → HUMAN (verified, stop everything)
+    // ══════════════════════════════════════════════════
+    let netScore      = 0;
+    let systemStopped = false;   // true once threshold is hit
+    let mainInterval  = null;    // reference to setInterval so we can stop it
+
+    // Computed values from drawTrajectory — passed to backend each window
+    let lastDeviationPct = null;
+    let lastVelocityCV   = null;
+
+    // ── COUNTERS ──
+    let nMouse = 0, nClick = 0, nKey = 0, nScroll = 0, nFocus = 0;
+    let honeypotHit = false;
+    const activeKeys = {};
+
+    // ── COUNTER UPDATER ──
+    function bump(id, val) {
+      const el = document.getElementById(id);
+      el.textContent = val;
+      el.classList.add('bump');
+      setTimeout(() => el.classList.remove('bump'), 200);
+    }
+
+    // ── MOUSE MOVEMENT (sampled every 25ms) ──
+    let lastMouse = 0;
+    document.addEventListener('mousemove', e => {
+      const now = Date.now();
+      if (now - lastMouse < 10) return;
+      lastMouse = now;
+      mouseData.push({ x: e.clientX, y: e.clientY, t: now });
+      bump('cMouse', ++nMouse);
+    });
+
+    // ── CLICKS WITH DURATION ──
+    // mousedown = button pressed, mouseup = button released
+    // duration = mouseup time minus mousedown time (in ms)
+    // Human: 80-200ms  |  Bot: 0-5ms (programmatic, instant)
+    let mouseDownTime = 0;
+    let mouseDownX    = 0;
+    let mouseDownY    = 0;
+
+    document.addEventListener('mousedown', e => {
+      mouseDownTime = Date.now();
+      mouseDownX    = e.clientX;
+      mouseDownY    = e.clientY;
+    });
+
+    document.addEventListener('mouseup', e => {
+      if (mouseDownTime === 0) return;
+      const duration = Date.now() - mouseDownTime;
+      clickData.push({
+        x:        mouseDownX,
+        y:        mouseDownY,
+        duration: duration,
+        t:        mouseDownTime,
+        tag:      e.target.tagName
+      });
+      bump('cClick', ++nClick);
+
+      // Show last click duration live in stats panel
+      const durEl = document.getElementById('cClickDur');
+      durEl.textContent = duration + ' ms';
+      // Colour-code it: green = human-like, orange = bot-like
+      durEl.style.color = duration < 20 ? 'var(--warning)' : 'var(--success)';
+
+      mouseDownTime = 0;
+    });
+
+    // ══════════════════════════════════════════════════
+    // KEYSTROKE DYNAMICS — Dwell Time + Flight Time
+    //
+    // DWELL TIME = how long a key is held down (keydown → keyup)
+    //   < 10ms          → bot (programmatic, instant)
+    //   10 – 30ms       → suspicious
+    //   30 – 200ms      → human
+    //   > 500ms         → suspicious (held too long)
+    //   CV < 5%         → bot (all dwells identical = robotic)
+    //
+    // FLIGHT TIME = time between one keyup and the next keydown
+    //   < 30ms          → bot (impossible for real typing)
+    //   30 – 80ms       → suspicious
+    //   80 – 400ms      → human
+    //   > 800ms         → suspicious (too slow)
+    //   CV < 10%        → bot (no digraph variation = robotic)
+    // ══════════════════════════════════════════════════
+
+    let lastKeyUpTime = 0;   // used to calculate flight time
+
+    document.addEventListener('keydown', e => {
+      if (!e.repeat) activeKeys[e.key] = Date.now();
+    });
+
+    document.addEventListener('keyup', e => {
+      const t = Date.now();
+      if (activeKeys[e.key] === undefined) return;
+
+      const dwell      = t - activeKeys[e.key];
+      const flightTime = lastKeyUpTime > 0 ? activeKeys[e.key] - lastKeyUpTime : null;
+
+      keystrokeData.push({
+        key:    e.key,
+        dwell:  dwell,
+        flight: flightTime,   // null for very first keystroke
+        t:      t
+      });
+
+      lastKeyUpTime = t;
+      delete activeKeys[e.key];
+      bump('cKey', ++nKey);
+
+      // ── Live analysis — runs on every keystroke ──
+      analyseKeystrokes();
+    });
+
+    // ── Keystroke analyser — updates panel after each key ──
+    function analyseKeystrokes() {
+      const dwells = keystrokeData.map(k => k.dwell);
+      if (dwells.length < 1) return;
+
+      // ── DWELL TIME — last keystroke, colour coded ──
+      // < 10ms     → red    — bot (impossibly fast)
+      // 10–30ms    → orange — suspicious
+      // 30–200ms   → green  — human
+      // > 200ms    → yellow — held too long
+      const lastDwell = dwells[dwells.length - 1];
+      const dwellEl   = document.getElementById('ksDwell');
+      dwellEl.textContent = lastDwell + 'ms';
+      if (lastDwell < 10) {
+        dwellEl.style.color = '#ff2222';
+      } else if (lastDwell < 30) {
+        dwellEl.style.color = '#ff6b35';
+      } else if (lastDwell <= 200) {
+        dwellEl.style.color = '#00ff9f';
+      } else {
+        dwellEl.style.color = '#ffcc00';
+      }
+
+      // ── DWELL CV % — needs at least 3 keys ──
+      // < 5%   → red    — constant = bot
+      // 5–15%  → yellow — borderline
+      // > 15%  → green  — variable = human
+      if (dwells.length < 3) return;
+      const avgDwell = dwells.reduce((a,b) => a+b, 0) / dwells.length;
+      const dwellVar = dwells.reduce((s,d) => s + Math.pow(d - avgDwell, 2), 0) / dwells.length;
+      const dwellCV  = avgDwell > 0 ? Math.round((Math.sqrt(dwellVar) / avgDwell) * 100) : 0;
+      const cvEl     = document.getElementById('ksDwellCV');
+      cvEl.textContent = dwellCV + '%';
+      if (dwellCV < 5) {
+        cvEl.style.color = '#ff2222';
+      } else if (dwellCV < 15) {
+        cvEl.style.color = '#ffcc00';
+      } else {
+        cvEl.style.color = '#00ff9f';
+      }
+
+      console.log(`[KS] Dwell:${lastDwell}ms CV:${dwellCV}%`);
+    }
+
+    // ── BACKSPACE TRACKER ──
+    // Only counts backspaces typed inside the email or password fields.
+    // Bots rarely use backspace — they inject final text directly.
+    // Humans make typos and correct them naturally.
+    //
+    // Tracked per event:
+    //   field     — which input ('email' or 'password')
+    //   t         — timestamp
+    //   charCount — how many chars were in the field at that moment
+    const backspaceData = [];
+    let nBackspace = 0;
+
+    ['email', 'password'].forEach(fieldId => {
+      document.getElementById(fieldId).addEventListener('keydown', e => {
+        if (e.key !== 'Backspace') return;
+        const field = document.getElementById(fieldId);
+        backspaceData.push({
+          field:     fieldId,
+          t:         Date.now(),
+          charCount: field.value.length   // chars in field at time of backspace
+        });
+        bump('cBackspace', ++nBackspace);
+      });
+    });
+
+    // ── SCROLL ──
+    let lastScroll = 0;
+    window.addEventListener('scroll', () => {
+      const now = Date.now();
+      if (now - lastScroll < 100) return;
+      lastScroll = now;
+      scrollData.push({ y: window.scrollY, t: now });
+      bump('cScroll', ++nScroll);
+    });
+
+    // ── FOCUS / BLUR ──
+    window.addEventListener('focus', () => {
+      focusData.push({ e: 'focus', t: Date.now() });
+      bump('cFocus', ++nFocus);
+    });
+    window.addEventListener('blur', () => {
+      focusData.push({ e: 'blur', t: Date.now() });
+      bump('cFocus', ++nFocus);
+    });
+
+    // ── HONEYPOT (original) ──
+    const hp = document.getElementById('honeypot');
+    ['input','change','focus'].forEach(ev =>
+      hp.addEventListener(ev, () => {
+        honeypotHit = true;
+        setBadge('bot', '⚠ Honeypot triggered — bot detected');
+      })
+    );
+
+    // ════════════════════════════════════════════════════
+    // 3 NEW HONEYPOTS — each tracked individually
+    // honeypotLog records WHICH trap was hit + timestamp
+    // ════════════════════════════════════════════════════
+    const honeypotLog = {
+      link_savepassword:   false,   // HP1: link click
+      input_rewrite_pwd:   false,   // HP2: rewrite password input
+      input_phone:         false    // HP3: mobile phone input
+    };
+
+    // Helper: mark a honeypot as triggered
+    function triggerHoneypot(trapId, statElId, label) {
+      honeypotLog[trapId] = { triggered: true, t: Date.now() };
+      honeypotHit = true;  // also flag the global
+
+      // Update stats panel
+      const el = document.getElementById(statElId);
+      if (el) {
+        el.textContent = '⚠ HIT';
+        el.classList.add('triggered');
+      }
+
+      setBadge('bot', `⚠ Trap triggered: ${label}`);
+      console.warn(`[HONEYPOT] "${label}" was interacted with → BOT FLAGGED`);
+    }
+
+    // ── HP1: Link "Save Password" — watch for click ──
+    // Bots call element.click() or follow href programmatically.
+    // This listener catches that.
+    const hpLink = document.getElementById('hp-link');
+    hpLink.addEventListener('click', (e) => {
+      e.preventDefault();  // don't navigate
+      triggerHoneypot('link_savepassword', 'hpLink', 'Save Password link');
+    });
+
+    // ── HP2: Input "Rewrite Password" — watch for any text ──
+    // Bots fill password fields they find in the DOM.
+    const hpRewritePwd = document.getElementById('hp-rewrite-pwd');
+    ['input', 'change', 'focus'].forEach(ev =>
+      hpRewritePwd.addEventListener(ev, () => {
+        triggerHoneypot('input_rewrite_pwd', 'hpPwd', 'Rewrite Password input');
+      })
+    );
+
+    // ── HP3: Input "Mobile Phone Number" — watch for any text ──
+    // Bots fill tel/phone fields too.
+    const hpPhone = document.getElementById('hp-phone');
+    ['input', 'change', 'focus'].forEach(ev =>
+      hpPhone.addEventListener(ev, () => {
+        triggerHoneypot('input_phone', 'hpPhone', 'Phone Number input');
+      })
+    );
+
+    // ── SENDER ──
+    let windowIndex = 0;
+
+    async function sendData() {
+      // Stop all operations if threshold already reached
+      if (systemStopped) return;
+
+      windowIndex++;
+
+      // Reset trajectory values — null means no movement this window
+      lastDeviationPct = null;
+      lastVelocityCV   = null;
+
+      // ── SNAPSHOT clicks ──
+      const clicksThisWindow     = clickData.slice();
+      clickData.length = 0;
+
+      // ── SNAPSHOT btn scores ──
+      const btnScoresThisWindow  = btnClickScores.slice();
+      btnClickScores.length = 0;
+
+      // ── SNAPSHOT keystrokes ──
+      const keystrokesThisWindow = keystrokeData.slice();
+      keystrokeData.length = 0;
+      lastKeyUpTime = 0;
+      document.getElementById('ksDwell').textContent   = '—';
+      document.getElementById('ksDwell').style.color   = 'var(--accent)';
+      document.getElementById('ksDwellCV').textContent = '—';
+      document.getElementById('ksDwellCV').style.color = 'var(--accent)';
+
+      // ── SNAPSHOT backspaces ──
+      const backspacesThisWindow = backspaceData.slice();
+      backspaceData.length = 0;
+
+      // ── SNAPSHOT focus events — reset each window ──
+      const focusThisWindow = focusData.slice();
+      focusData.length = 0;
+
+      // ── TRAJECTORY DRAW (also sets lastDeviationPct + lastVelocityCV) ──
+      drawTrajectory(mouseData, windowIndex);
+      mouseData.length = 0;
+
+      const payload = {
+        window:        windowIndex,
+        clicks:        clicksThisWindow,
+        btn_scores:    btnScoresThisWindow,
+        keystrokes:    keystrokesThisWindow,
+        backspaces:    backspacesThisWindow,
+        focus:         focusThisWindow,
+        honeypot:      honeypotHit,
+        honeypot_log:  honeypotLog,
+        deviation_pct: lastDeviationPct,   // computed by drawTrajectory
+        velocity_cv:   lastVelocityCV,     // computed by drawTrajectory
+        net_score:     netScore,            // current running score
+        timestamp:     Date.now()
+      };
+
+      // ── Show all clicks from this window ──
+      const logEl = document.getElementById('clickLog');
+      if (clicksThisWindow.length === 0) {
+        logEl.innerHTML = '<span class="click-log-empty">No clicks this window</span>';
+      } else {
+        logEl.innerHTML = clicksThisWindow.map((c, i) => {
+          const cls = c.duration < 20 ? 'dur-bot' : 'dur-human';
+          return `<div class="click-entry">#${i+1} &nbsp;<span class="${cls}">${c.duration}ms</span>&nbsp;·&nbsp;${c.tag}</div>`;
+        }).join('');
+      }
+
+      // ── Show btn scores ──
+      const btnLogEl = document.getElementById('btnScoreLog');
+      if (btnScoresThisWindow.length === 0) {
+        btnLogEl.innerHTML = '<span class="click-log-empty">No button clicks this window</span>';
+      } else {
+        btnLogEl.innerHTML = btnScoresThisWindow.map((b, i) => {
+          const durCls   = b.duration < 20 ? 'dur-bot' : 'dur-human';
+          const scoreCol = b.score >= 90 ? 'var(--warning)' : b.score >= 60 ? 'var(--accent)' : 'var(--success)';
+          return `<div class="click-entry">#${i+1} <span style="color:${scoreCol};font-weight:700;">Score:${b.score}</span>&nbsp;·&nbsp;<span class="${durCls}">${b.duration}ms</span></div>`;
+        }).join('');
+      }
+
+      const s = document.getElementById('sendStatus');
+      try {
+        const res = await fetch('http://localhost:8000/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        s.className = 'send-status sent';
+        s.textContent = '✓ Sent ' + new Date().toLocaleTimeString();
+        document.getElementById('lastSent').textContent = 'Last sent: ' + new Date().toLocaleTimeString();
+
+        // ── TIER 1: Kill switches — instant threshold ──
+        if (data.kill_switch) {
+          netScore = 100;
+          updateNetScoreDisplay();
+          stopSystem('bot');
+          return;
+        }
+
+        // ── TIER 2: Add delta to running net score ──
+        netScore = Math.round((netScore + data.delta) * 100) / 100;
+        updateNetScoreDisplay();
+
+        console.log(`[SCORE] Window #${windowIndex} | Delta: ${data.delta > 0 ? '+' : ''}${data.delta.toFixed(2)} | Net: ${netScore}`);
+        console.log('  Breakdown:', data.breakdown);
+
+        // ── CHECK THRESHOLDS ──
+        if (netScore >= 100) {
+          netScore = 100;
+          updateNetScoreDisplay();
+          stopSystem('bot');
+        } else if (netScore <= -100) {
+          netScore = -100;
+          updateNetScoreDisplay();
+          stopSystem('human');
+        }
+
+      } catch (err) {
+        s.className = 'send-status error';
+        s.textContent = '✗ Backend offline\n(' + err.message + ')';
+      }
+    }
+
+    // ══════════════════════════════════════════════════
+    // NET SCORE DISPLAY + SYSTEM STOP
+    // ══════════════════════════════════════════════════
+
+    function updateNetScoreDisplay() {
+      const val    = document.getElementById('netScoreVal');
+      const bar    = document.getElementById('netScoreBar');
+      const status = document.getElementById('netScoreStatus');
+
+      val.textContent = (netScore > 0 ? '+' : '') + Math.round(netScore);
+
+      // Colour: red = positive (bot), green = negative (human)
+      if (netScore > 50)       { val.style.color = '#ff2222'; }
+      else if (netScore > 20)  { val.style.color = '#ff6b35'; }
+      else if (netScore > 0)   { val.style.color = '#ffcc00'; }
+      else if (netScore > -20) { val.style.color = 'var(--accent)'; }
+      else if (netScore > -50) { val.style.color = '#44bb00'; }
+      else                     { val.style.color = '#00ff9f'; }
+
+      // Bar: fills from center — right = bot, left = human
+      const pct = Math.abs(netScore);   // 0–100
+      bar.style.width      = pct + '%';
+      bar.style.background = netScore >= 0 ? '#ff2222' : '#00ff9f';
+      if (netScore >= 0) {
+        bar.style.left  = '50%';
+        bar.style.right = 'auto';
+      } else {
+        bar.style.right = '50%';
+        bar.style.left  = 'auto';
+      }
+
+      status.textContent = netScore >= 100  ? '⚠ BOT DETECTED'
+                         : netScore <= -100 ? '✓ HUMAN VERIFIED'
+                         : `Monitoring... (${Math.round(100 - Math.abs(netScore))} pts to verdict)`;
+    }
+
+    function stopSystem(verdict) {
+      if (systemStopped) return;
+      systemStopped = true;
+
+      // Stop the 3-second interval
+      if (mainInterval) clearInterval(mainInterval);
+
+      // Clear trajectory canvas
+      const canvas = document.getElementById('trajectoryCanvas');
+      const ctx    = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      document.getElementById('trajLabel').textContent = '';
+
+      if (verdict === 'bot') {
+        document.getElementById('botPopupScore').textContent = 'Net Score: +' + Math.round(netScore);
+        document.getElementById('botPopup').classList.add('show');
+        setBadge('bot', '⚠ Bot detected — access blocked');
+        console.warn('[SYSTEM] BOT THRESHOLD REACHED. All monitoring stopped.');
+      } else {
+        document.getElementById('humanOverlay').classList.add('show');
+        setBadge('human', '✓ Human verified — monitoring stopped');
+        console.log('[SYSTEM] HUMAN VERIFIED. All monitoring stopped.');
+        // Auto-hide human overlay after 3 seconds
+        setTimeout(() => {
+          document.getElementById('humanOverlay').classList.remove('show');
+        }, 3000);
+      }
+    }
+
+    // ══════════════════════════════════════════════════
+    // QUICK BOT CHECKS
+    // ══════════════════════════════════════════════════
+
+    ;(function checkWebDriver() {
+      const el = document.getElementById('chkWebDriver');
+      if (navigator.webdriver === true) {
+        el.textContent = 'AI SURE';
+        el.style.color = '#ff2222';
+        // Webdriver = instant bot — trigger kill switch immediately
+        netScore = 100;
+        updateNetScoreDisplay();
+        stopSystem('bot');
+        console.warn('[BOT] navigator.webdriver = true → AUTOMATED BROWSER');
+      } else {
+        el.textContent = 'CLEAN';
+        el.style.color = '#00ff9f';
+      }
+    })();
+
+    mainInterval = setInterval(sendData, 3000);
+
+    // ── LOGIN BUTTON ──
+    function handleLogin(e) {
+      e.preventDefault();
+      if (!document.getElementById('email').value ||
+          !document.getElementById('password').value) {
+        alert('Please fill in both fields.');
+        return;
+      }
+      if (honeypotHit) { setBadge('bot', '⚠ Access denied'); return; }
+
+      document.getElementById('btnText').textContent = 'Verifying...';
+      document.getElementById('loginBtn').disabled = true;
+      sendData();
+      setTimeout(() => {
+        document.getElementById('btnText').textContent = 'Authenticate';
+        document.getElementById('loginBtn').disabled = false;
+      }, 2000);
+    }
+
+    // ══════════════════════════════════════════════════
+    // BUTTON CLICK HEATMAP SCORER
+    // No visual — scores go straight to behavior monitor
+    // ══════════════════════════════════════════════════
+    //
+    // Ring scoring (rectangular / Chebyshev distance):
+    //   0–10%  from center = 100 (bullseye)
+    //   10–20%             = 90
+    //   20–30%             = 80
+    //   ...
+    //   90–100%            = 10
+    //   Outside button     = 0
+
+    const btnClickScores = [];   // resets every 3-sec window, like clickData
+    let btnTotal = 0;            // running total (never resets)
+
+    function calcBtnScore(e) {
+      const btn  = document.getElementById('loginBtn');
+      const rect = btn.getBoundingClientRect();
+
+      const localX = e.clientX - rect.left;
+      const localY = e.clientY - rect.top;
+
+      // Normalise to -1..+1 (0 = dead center)
+      const normX = (localX / rect.width  - 0.5) * 2;
+      const normY = (localY / rect.height - 0.5) * 2;
+
+      // Chebyshev = max(|x|,|y|) → gives rectangular rings
+      const dist = Math.max(Math.abs(normX), Math.abs(normY));
+
+      let score;
+      if (dist > 1) {
+        score = 0;
+      } else {
+        score = Math.max(10, 100 - Math.floor(dist * 10) * 10);
+      }
+      return score;
+    }
+
+    document.getElementById('loginBtn').addEventListener('mouseup', function(e) {
+      const score    = calcBtnScore(e);
+      const duration = mouseDownTime > 0 ? Date.now() - mouseDownTime : 0;
+
+      // Push into this window's array
+      btnClickScores.push({ score, duration });
+      btnTotal++;
+      bump('hmTotal', btnTotal);
+
+      console.log(`[HEATMAP] Score: ${score} | Duration: ${duration}ms`);
+    });
+
+    // ══════════════════════════════════════════════════
+    // TRAJECTORY DRAW
+    // Draws every collected mouse point (sampled every 25ms)
+    // connected as a continuous path across the full page.
+    // Resets every 3 seconds in sync with sendData window.
+    // ══════════════════════════════════════════════════
+    function drawTrajectory(points, winIdx) {
+      const canvas = document.getElementById('trajectoryCanvas');
+      const label  = document.getElementById('trajLabel');
+
+      // Match canvas pixel dimensions to full viewport
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (points.length < 2) {
+        label.textContent = `W#${winIdx} — no movement`;
+        return;
+      }
+
+      // ── Draw the full connected path through every point ──
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+      ctx.strokeStyle = 'rgba(0, 229, 255, 0.5)';
+      ctx.lineWidth   = 1.5;
+      ctx.lineJoin    = 'round';
+      ctx.lineCap     = 'round';
+      ctx.stroke();
+
+      // ── Dot at every sampled point ──
+      points.forEach((p, i) => {
+        const isFirst = i === 0;
+        const isLast  = i === points.length - 1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, isFirst || isLast ? 4 : 2, 0, Math.PI * 2);
+        ctx.fillStyle = isFirst ? '#00ff9f'       // green = start
+                      : isLast  ? '#ff6b35'       // orange = end
+                      : 'rgba(0,229,255,0.35)';   // dim cyan = mid points
+        ctx.fill();
+      });
+
+      // ── Arrow at the end point ──
+      const prev = points[points.length - 2];
+      const last = points[points.length - 1];
+      const angle  = Math.atan2(last.y - prev.y, last.x - prev.x);
+      const tipLen = 9;
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(
+        last.x - tipLen * Math.cos(angle - 0.4),
+        last.y - tipLen * Math.sin(angle - 0.4)
+      );
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(
+        last.x - tipLen * Math.cos(angle + 0.4),
+        last.y - tipLen * Math.sin(angle + 0.4)
+      );
+      ctx.strokeStyle = '#ff6b35';
+      ctx.lineWidth   = 2;
+      ctx.stroke();
+
+      // ── Calculate actual path length (sum of all segment lengths) ──
+      let pathLength = 0;
+      for (let i = 1; i < points.length; i++) {
+        const dx = points[i].x - points[i-1].x;
+        const dy = points[i].y - points[i-1].y;
+        pathLength += Math.sqrt(dx*dx + dy*dy);
+      }
+      pathLength = Math.round(pathLength);
+
+      // ── Calculate minimum distance (straight line start → end) ──
+      const minDist = Math.round(Math.sqrt(
+        Math.pow(last.x - points[0].x, 2) +
+        Math.pow(last.y - points[0].y, 2)
+      ));
+
+      // ── Deviation % = how much longer the actual path is vs straight line ──
+      // Formula: ((pathLength - minDist) / minDist) * 100
+      // 0–5%   → very bot-like  (red)
+      // 5–10%  → suspicious     (orange)
+      // 10%+   → human-like     (green)
+      // ── Deviation % — only calculated if path is 250px or more ──
+      // Below 250px the movement is too short to be meaningful.
+      const deviation = minDist > 0
+        ? Math.round(((pathLength - minDist) / minDist) * 100)
+        : 0;
+
+      const devEl = document.getElementById('trajDev');
+
+      if (pathLength < 250) {
+        devEl.textContent = '— (< 250px)';
+        devEl.style.color = 'var(--dim)';
+      } else {
+        devEl.textContent = deviation + ' %';
+        if (deviation < 1) {
+          devEl.style.color = '#ff2222';        // red      — 0–1%   bot-like
+        } else if (deviation < 2) {
+          devEl.style.color = '#ff6b35';        // orange   — 1–2%   suspicious
+        } else if (deviation < 5) {
+          devEl.style.color = '#ffcc00';        // yellow   — 2–5%   borderline
+        } else {
+          devEl.style.color = '#00ff9f';        // green    — 5%+    human-like
+        }
+      }
+
+      // Update stats panel
+      document.getElementById('trajPathLen').textContent  = pathLength + ' px';
+      document.getElementById('trajMinDist').textContent  = minDist    + ' px';
+
+      // ── Velocity Consistency Check ──
+      // Mouse data is collected at 10ms but velocity is calculated
+      // using points 25ms apart — gives a more stable speed reading.
+      // We subsample: take every point where t difference ≥ 25ms.
+      //
+      //   CV < 5%   → bot-like   (red)
+      //   5–10%     → borderline (yellow)
+      //   > 10%     → human      (green)
+      const velEl = document.getElementById('velCV');
+
+      if (pathLength < 250) {
+        velEl.textContent = '— (< 250px)';
+        velEl.style.color = 'var(--dim)';
+        lastVelocityCV = null;
+      } else {
+        // Build 25ms-spaced subsample from the raw 10ms points
+        const VEL_INTERVAL = 25;
+        const velPoints = [points[0]];
+        for (let i = 1; i < points.length; i++) {
+          if (points[i].t - velPoints[velPoints.length - 1].t >= VEL_INTERVAL) {
+            velPoints.push(points[i]);
+          }
+        }
+
+        if (velPoints.length < 3) {
+          velEl.textContent = '—';
+          velEl.style.color = 'var(--dim)';
+        } else {
+          // Calculate speed for each 25ms segment
+          const speeds = [];
+          for (let i = 1; i < velPoints.length; i++) {
+            const dx   = velPoints[i].x - velPoints[i-1].x;
+            const dy   = velPoints[i].y - velPoints[i-1].y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const dt   = velPoints[i].t - velPoints[i-1].t;
+            if (dt > 0) speeds.push(dist / dt);
+          }
+
+        if (speeds.length < 2) {
+          velEl.textContent = '—';
+          velEl.style.color = 'var(--dim)';
+        } else {
+          const mean     = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+          const variance = speeds.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / speeds.length;
+          const stdDev   = Math.sqrt(variance);
+          const cv       = mean > 0 ? Math.round((stdDev / mean) * 100) : 0;
+
+          velEl.textContent = cv + ' %';
+
+          if (cv < 5) {
+            velEl.style.color = '#ff2222';
+          } else if (cv < 10) {
+            velEl.style.color = '#ffcc00';
+          } else {
+            velEl.style.color = '#00ff9f';
+          }
+
+          console.log(`[VEL] Window #${winIdx} | mean speed:${mean.toFixed(2)}px/ms | CV:${cv}%`);
+          lastVelocityCV = cv;    // store for payload
+        }
+        }  // close velPoints.length < 3 else
+      }    // close pathLength < 100 else
+
+      // Store deviation for payload (null if path < 250px)
+      lastDeviationPct = pathLength >= 250 ? deviation : null;
+
+      label.textContent = `W#${winIdx} · dev: ${deviation}%`;
+      console.log(`[TRAJ] Window #${winIdx} | path:${pathLength}px | min:${minDist}px | deviation:${deviation}%`);
+    }
+
+    // ── BADGE ──
+    function setBadge(state, msg) {
+      const b = document.getElementById('badge');
+      b.className = 'badge ' + (state || '');
+      document.getElementById('badgeText').textContent = msg;
+    }
+  </script>
+</body>
+</html>
