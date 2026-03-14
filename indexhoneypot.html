@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secure Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0c0f;
+      --surface: #111418;
+      --border: #1e2329;
+      --accent: #00d4aa;
+      --accent-dim: rgba(0, 212, 170, 0.12);
+      --danger: #ff4757;
+      --danger-dim: rgba(255, 71, 87, 0.12);
+      --text: #e8eaed;
+      --muted: #5a6070;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'DM Sans', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* Glow orb */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(0,212,170,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .card {
+      width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      position: relative;
+      box-shadow: 0 0 0 1px rgba(0,212,170,0.05), 0 40px 80px rgba(0,0,0,0.6);
+      animation: fadeUp 0.5s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 32px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      animation: pulse 2s ease infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    h1 {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 32px;
+      font-weight: 300;
+    }
+
+    .field {
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="email"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    /* ============================================
+       HONEYPOT FIELD — Hidden from real users
+       ============================================ */
+    .hp-field {
+      opacity: 0;
+      position: absolute;
+      top: -9999px;
+      left: -9999px;
+      height: 0;
+      width: 0;
+      overflow: hidden;
+      z-index: -1;
+      pointer-events: none;
+      /* NOTE: Do NOT use display:none or visibility:hidden — 
+         some bots detect CSS-hidden fields. Position off-screen is more reliable. */
+    }
+
+    .btn {
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      color: #000;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      margin-top: 8px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn:hover { opacity: 0.88; }
+    .btn:active { transform: scale(0.98); }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: var(--mono);
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .score-panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .score-panel .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .score-panel .row:last-child { border-bottom: none; }
+
+    .pass  { color: var(--accent); }
+    .fail  { color: var(--danger); }
+    .warn  { color: #ffa502; }
+
+    /* Block screen */
+    #block-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #060709;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      animation: flicker 0.1s;
+    }
+
+    #block-screen.active { display: flex; }
+
+    @keyframes flicker {
+      0%   { opacity: 0; }
+      50%  { opacity: 1; }
+      75%  { opacity: 0.8; }
+      100% { opacity: 1; }
+    }
+
+    .block-icon {
+      font-size: 64px;
+      line-height: 1;
+    }
+
+    .block-title {
+      font-family: var(--mono);
+      font-size: 28px;
+      color: var(--danger);
+      letter-spacing: -1px;
+    }
+
+    .block-sub {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      max-width: 380px;
+      line-height: 1.8;
+    }
+
+    .block-code {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--danger);
+      background: var(--danger-dim);
+      border: 1px solid rgba(255,71,87,0.2);
+      padding: 10px 20px;
+      border-radius: 6px;
+    }
+
+    .meta {
+      margin-top: 28px;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      font-family: var(--mono);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== BOT BLOCK SCREEN ===== -->
+<div id="block-screen">
+  <div class="block-icon">🛡️</div>
+  <div class="block-title">ACCESS DENIED</div>
+  <div class="block-sub">
+    Automated bot activity has been detected.<br>
+    This IP and session has been flagged and blocked.<br>
+    Further access to this site is not permitted.
+  </div>
+  <div class="block-code" id="block-reason">REASON: —</div>
+  <div class="meta">If you believe this is a mistake, contact support.</div>
+</div>
+
+<!-- ===== LOGIN CARD ===== -->
+<div class="card" id="login-card">
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <span>SECURE SESSION · TLS 1.3 · BOT SHIELD ACTIVE</span>
+  </div>
+
+  <h1>Sign <span>in</span></h1>
+  <p class="subtitle">Protected by multi-layer bot detection.</p>
+
+  <form id="login-form" autocomplete="off" novalidate>
+
+    <!-- VISIBLE FIELDS -->
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" name="username" placeholder="enter username" autocomplete="off" />
+    </div>
+
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••••" autocomplete="off" />
+    </div>
+
+    <!-- ============================================================
+         HONEYPOT FIELDS (3 traps — invisible to real users)
+         ============================================================ -->
+
+    <!-- Trap 1: Fake "email" field that looks like a standard form field to bots -->
+    <div class="hp-field" aria-hidden="true" tabindex="-1">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" name="email" tabindex="-1" autocomplete="off" value="" />
+    </div>
+
+    <!-- Trap 2: Fake "phone" field — old-school autofill bots love phone fields -->
+    <div class="hp-field" aria-hidden="true" tabindex="-1">
+      <label for="phone">Phone</label>
+      <input type="text" id="phone" name="phone" tabindex="-1" autocomplete="off" value="" />
+    </div>
+
+    <!-- Trap 3: A hidden "website" field — classic honeypot bots always fill this -->
+    <div class="hp-field" aria-hidden="true" tabindex="-1">
+      <label for="website">Website</label>
+      <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" value="" />
+    </div>
+
+    <!-- Hidden timing token: real users take time; bots submit instantly -->
+    <input type="hidden" id="form_token" name="form_token" value="" />
+    <input type="hidden" id="time_start" name="time_start" value="" />
+    <input type="hidden" id="move_count" name="move_count" value="0" />
+
+    <button type="submit" class="btn">AUTHENTICATE →</button>
+  </form>
+
+  <div class="divider">detection signals</div>
+
+  <!-- Live signal monitor (for demo purposes — remove in production) -->
+  <div class="score-panel" id="signal-panel">
+    <div class="row"><span>⏱ Fill time</span><span id="sig-time" class="warn">waiting...</span></div>
+    <div class="row"><span>🖱 Mouse/touch activity</span><span id="sig-mouse" class="warn">waiting...</span></div>
+    <div class="row"><span>🍯 Honeypot fields</span><span id="sig-hp" class="pass">CLEAN</span></div>
+    <div class="row"><span>⌨️ Keystroke pattern</span><span id="sig-keys" class="warn">waiting...</span></div>
+    <div class="row"><span>📋 Tab order respected</span><span id="sig-tab" class="warn">waiting...</span></div>
+    <div class="row"><span>🤖 Bot verdict</span><span id="sig-verdict" class="warn">—</span></div>
+  </div>
+
+  <p class="meta">Demo mode · Signals update in real time</p>
+</div>
+
+
+<script>
+/* ================================================================
+   HONEYPOT + BEHAVIORAL BOT DETECTION ENGINE
+   ================================================================
+   Signals used:
+   1. Honeypot field fill (instant hard block)
+   2. Form fill time (too fast = bot)
+   3. Mouse / touch movement (bots don't move the cursor)
+   4. Keystroke timing & pattern
+   5. Tab-key navigation (humans tab through forms)
+
+   How blocking works:
+   - If any hard-block signal fires → bot is BLOCKED from page,
+     session-flagged, and cannot navigate further.
+   - Soft signals contribute to a risk score.
+   ================================================================ */
+
+  const HARD_BLOCK_TIME_MS = 800;   // Submissions faster than this are bots
+  const RISK_THRESHOLD     = 3;     // Score ≥ this = block
+  const SESSION_KEY        = '__bot_blocked';
+
+  let formLoadTime  = Date.now();
+  let mouseMoves    = 0;
+  let keystrokes    = [];
+  let tabUsed       = false;
+  let riskScore     = 0;
+  let blocked       = false;
+
+  // --- Check if already blocked (persists across page loads) ---
+  function checkExistingBlock() {
+    if (sessionStorage.getItem(SESSION_KEY) === '1') {
+      hardBlock('PREVIOUS_SESSION_FLAGGED');
+    }
+  }
+
+  // --- Record mouse/touch movement ---
+  document.addEventListener('mousemove', () => {
+    mouseMoves++;
+    updatePanel();
+  });
+  document.addEventListener('touchstart', () => {
+    mouseMoves += 5; // Touch counts strongly
+    updatePanel();
+  });
+
+  // --- Record keystrokes (timing pattern) ---
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') tabUsed = true;
+    keystrokes.push(Date.now());
+    updatePanel();
+  });
+
+  // --- Honeypot field watchers ---
+  ['email', 'phone', 'website'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      if (el.value.length > 0) hardBlock(`HONEYPOT_FIELD_FILLED:${id.toUpperCase()}`);
+    });
+    // Also catch bots that set value programmatically
+    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    Object.defineProperty(el, 'value', {
+      get() { return desc.get.call(this); },
+      set(v) {
+        desc.set.call(this, v);
+        if (v && v.length > 0) hardBlock(`HONEYPOT_AUTO_FILLED:${id.toUpperCase()}`);
+      }
+    });
+  });
+
+  // --- Form submit analysis ---
+  document.getElementById('login-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (blocked) return;
+
+    const fillTime    = Date.now() - formLoadTime;
+    const username    = document.getElementById('username').value.trim();
+    const password    = document.getElementById('password').value;
+    const hpEmail     = document.getElementById('email').value;
+    const hpPhone     = document.getElementById('phone').value;
+    const hpWebsite   = document.getElementById('website').value;
+
+    // ── Signal 1: Honeypot fields must be empty ──────────────────
+    if (hpEmail || hpPhone || hpWebsite) {
+      hardBlock('HONEYPOT_FIELD_FILLED_ON_SUBMIT');
+      return;
+    }
+
+    // ── Signal 2: Fill time too fast ─────────────────────────────
+    if (fillTime < HARD_BLOCK_TIME_MS) {
+      hardBlock(`TOO_FAST_${fillTime}MS`);
+      return;
+    }
+    if (fillTime < 3000) riskScore += 2;
+
+    // ── Signal 3: No mouse / touch movement ──────────────────────
+    if (mouseMoves === 0) riskScore += 2;
+
+    // ── Signal 4: No keystrokes (value injected programmatically) ─
+    if (keystrokes.length === 0 && (username || password)) riskScore += 2;
+
+    // ── Signal 5: Keystroke timing uniformity (bot = too uniform) ─
+    if (keystrokes.length >= 4) {
+      const gaps = [];
+      for (let i = 1; i < keystrokes.length; i++) gaps.push(keystrokes[i] - keystrokes[i-1]);
+      const avg = gaps.reduce((a,b)=>a+b,0)/gaps.length;
+      const variance = gaps.reduce((s,g)=>s+Math.pow(g-avg,2),0)/gaps.length;
+      if (variance < 5) riskScore += 2; // Perfectly uniform = bot
+    }
+
+    // ── Signal 6: Tab order not used (minor signal) ──────────────
+    if (!tabUsed) riskScore += 1;
+
+    // ── Decision ─────────────────────────────────────────────────
+    updatePanel(fillTime);
+
+    if (riskScore >= RISK_THRESHOLD) {
+      hardBlock(`RISK_SCORE_${riskScore}`);
+    } else {
+      allowAccess();
+    }
+  });
+
+  // ── Hard block: lock out the session ─────────────────────────────
+  function hardBlock(reason) {
+    if (blocked) return;
+    blocked = true;
+
+    // Persist block across navigations in this session
+    sessionStorage.setItem(SESSION_KEY, '1');
+
+    document.getElementById('block-reason').textContent = `REASON: ${reason}`;
+    const bs = document.getElementById('block-screen');
+    bs.classList.add('active');
+
+    // Prevent any navigation or back-button escape
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', () => {
+      window.history.pushState(null, '', window.location.href);
+    });
+
+    // Blank the page content behind the block screen
+    document.getElementById('login-card').style.display = 'none';
+
+    // Override any link/form clicks that might try to navigate away
+    document.addEventListener('click', e => e.preventDefault(), true);
+    document.addEventListener('submit', e => e.preventDefault(), true);
+
+    console.warn(`[BotShield] Session blocked. Reason: ${reason}`);
+  }
+
+  // ── Allow: human passed all checks ──────────────────────────────
+  function allowAccess() {
+    // In production: submit credentials to your backend here.
+    // The backend should also run its own server-side honeypot check.
+    alert('✅ Human verified! Proceeding to dashboard...');
+    // window.location.href = '/dashboard';
+  }
+
+  // ── Live signal panel updater (remove in production) ─────────────
+  function updatePanel(fillTime) {
+    const elapsed = fillTime || (Date.now() - formLoadTime);
+
+    const sigTime = document.getElementById('sig-time');
+    sigTime.textContent = (elapsed/1000).toFixed(1) + 's';
+    sigTime.className = elapsed < 800 ? 'fail' : elapsed < 3000 ? 'warn' : 'pass';
+
+    const sigMouse = document.getElementById('sig-mouse');
+    sigMouse.textContent = mouseMoves + ' events';
+    sigMouse.className = mouseMoves === 0 ? 'fail' : mouseMoves < 3 ? 'warn' : 'pass';
+
+    const sigHp = document.getElementById('sig-hp');
+    const hpDirty = ['email','phone','website'].some(id => document.getElementById(id).value);
+    sigHp.textContent = hpDirty ? 'TRIGGERED ⚠' : 'CLEAN';
+    sigHp.className   = hpDirty ? 'fail' : 'pass';
+
+    const sigKeys = document.getElementById('sig-keys');
+    sigKeys.textContent = keystrokes.length + ' keystrokes';
+    sigKeys.className = keystrokes.length === 0 ? 'warn' : 'pass';
+
+    const sigTab = document.getElementById('sig-tab');
+    sigTab.textContent = tabUsed ? 'YES' : 'NO';
+    sigTab.className   = tabUsed ? 'pass' : 'warn';
+
+    const sigVerdict = document.getElementById('sig-verdict');
+    sigVerdict.textContent = riskScore >= RISK_THRESHOLD ? `BOT (score ${riskScore})` : riskScore > 0 ? `SUSPICIOUS (${riskScore})` : 'LIKELY HUMAN';
+    sigVerdict.className   = riskScore >= RISK_THRESHOLD ? 'fail' : riskScore > 0 ? 'warn' : 'pass';
+  }
+
+  // Live update every 500ms
+  setInterval(updatePanel, 500);
+
+  // --- Initialize ---
+  checkExistingBlock();
+  document.getElementById('time_start').value = formLoadTime;
+</script>
+</body>
+</html>
