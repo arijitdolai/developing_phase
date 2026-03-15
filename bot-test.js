@@ -1,72 +1,91 @@
 const puppeteer = require('puppeteer');
 
 async function runBot() {
-    // Launch browser - headless: false so you can watch the bot work
     const browser = await puppeteer.launch({ 
-        headless: false,
-        args: ['--window-size=1280,800'] 
+        headless: false, // Set to true if you don't want to see the window
+        defaultViewport: { width: 1280, height: 800 }
     });
     const page = await browser.newPage();
     
-    // REPLACE with your local or hosted URL
+    // 1. SET YOUR URL HERE
     const targetUrl = 'http://localhost:3000'; 
     await page.goto(targetUrl);
 
-    console.log("--- BOT STARTED: Running Infinite Interaction Cycle ---");
+    console.log("--- BOT STARTED: Running with Anti-Refresh Protection ---");
 
-    // helper for linear movement
-    async function botMove(targetX, targetY) {
-        // Puppeteer's mouse move is perfectly linear by default
-        await page.mouse.move(targetX, targetY, { steps: 50 }); 
+    // 2. INJECT PROTECTION: Prevents the page from refreshing on click
+    // This ensures your score doesn't reset to 0 during the test
+    await page.evaluateOnNewDocument(() => {
+        window.addEventListener('click', (e) => {
+            const target = e.target.closest('a, button, input[type="submit"]');
+            if (target) {
+                console.log("Bot clicked: Refresh blocked to preserve ML score.");
+                e.preventDefault(); 
+            }
+        }, true);
+    });
+
+    // Helper: Linear movement logic
+    async function botMove(x, y) {
+        await page.mouse.move(x, y, { steps: 50 }); 
     }
 
     while (true) {
         try {
-            console.log("Starting new interaction wave...");
+            console.log("\n--- Starting Interaction Cycle ---");
 
-            // 1. Random Cursor Movement (Simulating "Scanning" the page)
-            await botMove(Math.random() * 800, Math.random() * 600);
-            await new Promise(r => setTimeout(r, 500));
-
-            // 2. Typing into an Input field
-            // Replace '#username' with your actual input ID
-            const inputExists = await page.$('input');
-            if (inputExists) {
-                await botMove(200, 200); // Move to general area
-                await page.click('input'); 
-                await page.type('input', 'Bot_Attack_Sequence_Active', { delay: 50 });
-                console.log("Typed into input field.");
+            // STEP A: Randomized Mouse Scanning
+            // Moves the mouse to random coordinates to generate "Path Data"
+            for(let i=0; i<3; i++) {
+                await botMove(Math.random() * 1000, Math.random() * 800);
+                await new Promise(r => setTimeout(r, 300));
             }
 
-            // 3. Clicking a Button
-            // Replace 'button' with your actual button ID/Class
-            const buttonExists = await page.$('button');
-            if (buttonExists) {
-                await botMove(400, 400); // Move toward button
+            // STEP B: Typing Simulation
+            const inputField = await page.$('input');
+            if (inputField) {
+                const box = await inputField.boundingBox();
+                await botMove(box.x + 5, box.y + 5);
+                await page.click('input');
+                // Typing with a robotic, perfectly consistent 50ms delay
+                await page.type('input', 'Automated_Sequence_Test_01', { delay: 50 });
+                console.log("Action: Typed into field.");
+            }
+
+            // STEP C: Button Interaction (With Sync Delay)
+            const button = await page.$('button');
+            if (button) {
+                const box = await button.boundingBox();
+                await botMove(box.x + (box.width/2), box.y + (box.height/2));
+                
+                // CRITICAL: Hover first so the JS Hook sends the path data
+                await page.hover('button'); 
+                console.log("Action: Hovering button (Syncing data...)");
+                await new Promise(r => setTimeout(r, 1500)); // 1.5s wait for your backend
+                
                 await page.click('button');
-                console.log("Clicked a button.");
+                console.log("Action: Clicked button.");
             }
 
-            // 4. Clicking a URL/Link
-            const linkExists = await page.$('a');
-            if (linkExists) {
-                // We just hover/click the first link found
+            // STEP D: Link Interaction
+            const link = await page.$('a');
+            if (link) {
+                const box = await link.boundingBox();
+                await botMove(box.x + 2, box.y + 2);
+                await page.hover('a');
+                await new Promise(r => setTimeout(r, 1000));
                 await page.click('a');
-                console.log("Navigated via Link.");
-                await page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {});
-                // Go back to the main page to keep the loop going
-                await page.goto(targetUrl);
+                console.log("Action: Clicked Link.");
             }
 
-            // Wait 2 seconds before repeating to allow backend to process
-            console.log("Wave complete. Waiting for next cycle...");
+            console.log("Cycle Complete. Restarting in 2 seconds...");
             await new Promise(r => setTimeout(r, 2000));
 
         } catch (error) {
-            console.log("Interaction failed or element not found, retrying loop...", error.message);
-            await page.goto(targetUrl); // Refresh if it gets stuck
+            console.log("Loop Error (likely element missing), retrying...", error.message);
+            await page.goto(targetUrl).catch(() => {}); 
         }
     }
 }
 
-runBot().catch(err => console.error("Fatal Bot Error:", err));
+runBot().catch(err => console.error("Fatal Error:", err));
