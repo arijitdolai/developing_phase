@@ -1,91 +1,76 @@
 const puppeteer = require('puppeteer');
 
-async function runBot() {
-    const browser = await puppeteer.launch({ 
-        headless: false, // Set to true if you don't want to see the window
-        defaultViewport: { width: 1280, height: 800 }
-    });
-    const page = await browser.newPage();
-    
-    // 1. SET YOUR URL HERE
-    const targetUrl = 'http://localhost:3000'; 
-    await page.goto(targetUrl);
-
-    console.log("--- BOT STARTED: Running with Anti-Refresh Protection ---");
-
-    // 2. INJECT PROTECTION: Prevents the page from refreshing on click
-    // This ensures your score doesn't reset to 0 during the test
-    await page.evaluateOnNewDocument(() => {
-        window.addEventListener('click', (e) => {
-            const target = e.target.closest('a, button, input[type="submit"]');
-            if (target) {
-                console.log("Bot clicked: Refresh blocked to preserve ML score.");
-                e.preventDefault(); 
-            }
-        }, true);
-    });
-
-    // Helper: Linear movement logic
-    async function botMove(x, y) {
-        await page.mouse.move(x, y, { steps: 50 }); 
+class BotSimulator {
+    constructor() {
+        this.browser = null;
+        this.page = null;
     }
 
-    while (true) {
-        try {
-            console.log("\n--- Starting Interaction Cycle ---");
+    async init(url) {
+        // Launching with 'headless: false' lets you see the bot in action
+        this.browser = await puppeteer.launch({ headless: false });
+        this.page = await this.browser.newPage();
+        await this.page.goto(url);
+    }
 
-            // STEP A: Randomized Mouse Scanning
-            // Moves the mouse to random coordinates to generate "Path Data"
-            for(let i=0; i<3; i++) {
-                await botMove(Math.random() * 1000, Math.random() * 800);
-                await new Promise(r => setTimeout(r, 300));
-            }
+    // PROFILE 1: The "Instant" Bot (Teleportation)
+    // Most basic bot: no intermediate coordinates recorded
+    async teleportMove(x, y) {
+        console.log(`Teleporting to ${x}, ${y}`);
+        await this.page.mouse.move(x, y); 
+        await this.page.mouse.click(x, y);
+    }
 
-            // STEP B: Typing Simulation
-            const inputField = await page.$('input');
-            if (inputField) {
-                const box = await inputField.boundingBox();
-                await botMove(box.x + 5, box.y + 5);
-                await page.click('input');
-                // Typing with a robotic, perfectly consistent 50ms delay
-                await page.type('input', 'Automated_Sequence_Test_01', { delay: 50 });
-                console.log("Action: Typed into field.");
-            }
-
-            // STEP C: Button Interaction (With Sync Delay)
-            const button = await page.$('button');
-            if (button) {
-                const box = await button.boundingBox();
-                await botMove(box.x + (box.width/2), box.y + (box.height/2));
-                
-                // CRITICAL: Hover first so the JS Hook sends the path data
-                await page.hover('button'); 
-                console.log("Action: Hovering button (Syncing data...)");
-                await new Promise(r => setTimeout(r, 1500)); // 1.5s wait for your backend
-                
-                await page.click('button');
-                console.log("Action: Clicked button.");
-            }
-
-            // STEP D: Link Interaction
-            const link = await page.$('a');
-            if (link) {
-                const box = await link.boundingBox();
-                await botMove(box.x + 2, box.y + 2);
-                await page.hover('a');
-                await new Promise(r => setTimeout(r, 1000));
-                await page.click('a');
-                console.log("Action: Clicked Link.");
-            }
-
-            console.log("Cycle Complete. Restarting in 2 seconds...");
-            await new Promise(r => setTimeout(r, 2000));
-
-        } catch (error) {
-            console.log("Loop Error (likely element missing), retrying...", error.message);
-            await page.goto(targetUrl).catch(() => {}); 
+    // PROFILE 2: The "Linear" Bot (Mathematical perfection)
+    // Moves in a perfectly straight line with 0 variance
+    async linearMove(targetX, targetY, steps = 10) {
+        console.log("Executing Linear Movement...");
+        const start = await this.page.evaluate(() => ({ x: window.scrollX, y: window.scrollY })); 
+        // Note: simplified start point; usually tracked from last known pos
+        
+        for (let i = 0; i <= steps; i++) {
+            const x = i * (targetX / steps);
+            const y = i * (targetY / steps);
+            await this.page.mouse.move(x, y);
+            // No jitter or delay variation here
+            await new Promise(r => setTimeout(r, 20)); 
         }
+    }
+
+    // PROFILE 3: The "Jitter" Bot (Attempting to bypass simple checks)
+    // Adds random noise, but often lacks human acceleration curves
+    async jitterMove(targetX, targetY) {
+        console.log("Executing Jitter Movement...");
+        for (let i = 0; i < 20; i++) {
+            const x = (i * (targetX / 20)) + (Math.random() * 5);
+            const y = (i * (targetY / 20)) + (Math.random() * 5);
+            await this.page.mouse.move(x, y);
+            await new Promise(r => setTimeout(r, Math.random() * 50));
+        }
+    }
+
+    async close() {
+        await this.browser.close();
     }
 }
 
-runBot().catch(err => console.error("Fatal Error:", err));
+// EXECUTION SCRIPT
+(async () => {
+    const tester = new BotSimulator();
+    await tester.init('http://localhost:3000'); 
+
+    console.log("--- STARTING PERPETUAL BOT ATTACK ---");
+
+    // This loop keeps the bot active so your threshold can be reached
+    for (let i = 0; i < 50; i++) { 
+        console.log(`Attack Wave #${i}`);
+        
+        // Simulate a bot-like linear move
+        await tester.linearMove(Math.random() * 1000, Math.random() * 800, 100);
+        
+        // Wait a bit to simulate "thinking" (even bots do this)
+        await new Promise(r => setTimeout(r, 500));
+    }
+
+    console.log("Testing complete. If not detected, your threshold may be too high!");
+})();
